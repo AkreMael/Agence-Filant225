@@ -1,0 +1,191 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Information about the application users",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID" },
+        "name": { "type": "string", "description": "Full name of the user" },
+        "phone": { "type": "string", "description": "Sanitized phone number" },
+        "city": { "type": "string", "description": "City of the user" },
+        "pin": { "type": "string", "description": "4-digit PIN for authentication" },
+        "role": { "type": "string", "description": "Role of the user (e.g., Client, Admin 225)" },
+        "isVerified": { "type": "boolean", "description": "Whether the user is verified" },
+        "lastConnection": { "type": "string", "format": "date-time", "description": "Last connection time ISO string" },
+        "activeSessionId": { "type": "string", "description": "ID of the current active session" },
+        "fcmToken": { "type": "string", "description": "Firebase Cloud Messaging token" },
+        "lastSeen": { "type": "string", "format": "date-time", "description": "Server timestamp of last activity" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp of last update" },
+        "status": { "type": "string", "enum": ["active", "pending", "blocked"], "description": "Status of the user account" }
+      },
+      "required": ["name", "phone"]
+    },
+    "Worker": {
+      "title": "Worker",
+      "description": "Service providers (workers, agencies, owners, companies)",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "city": { "type": "string" },
+        "price": { "type": "string" },
+        "frequency": { "type": "string" },
+        "service": { "type": "string" },
+        "description": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "isVerified": { "type": "boolean" },
+        "verifiedAt": { "type": "string", "format": "date-time" },
+        "typeInscription": { "type": "string" },
+        "userId": { "type": "string" },
+        "photoUrl": { "type": "string" },
+        "isUnblurred": { "type": "boolean" },
+        "rating": { "type": "number" },
+        "phone": { "type": "string" },
+        "profileImageUrl": { "type": "string" }
+      }
+    },
+    "Offer": {
+      "title": "Offer",
+      "description": "Job or service offers",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Recruitment": {
+      "title": "Recruitment",
+      "description": "Recruitment requests",
+      "type": "object",
+      "properties": {
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "ActivityLog": {
+      "title": "Activity Log",
+      "description": "Logs of user connections and sessions",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "action": { "type": "string", "enum": ["connect", "disconnect", "session_start"] },
+        "platform": { "type": "string" },
+        "city": { "type": "string" }
+      }
+    },
+    "CentralizedRequest": {
+      "title": "Centralized Request",
+      "description": "Any form submission from clients",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userPhone": { "type": "string" },
+        "type": { "type": "string", "enum": ["worker", "equipment", "real_estate", "emergency", "location"] },
+        "data": { "type": "object" },
+        "status": { "type": "string", "enum": ["pending", "contacted", "completed", "cancelled"] },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "adminNote": { "type": "string" }
+      }
+    },
+    "MessageLog": {
+      "title": "Message Log",
+      "description": "Log of messages sent in chat",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "receiverId": { "type": "string" },
+        "content": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "type": { "type": "string", "enum": ["text", "image", "audio"] }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{phone}": {
+      "schema": "User",
+      "description": "User profiles indexed by sanitized phone number"
+    },
+    "/activity_logs/{id}": {
+      "schema": "ActivityLog",
+      "description": "Tracking user connections"
+    },
+    "/centralized_requests/{id}": {
+      "schema": "CentralizedRequest",
+      "description": "All client requests in one place"
+    },
+    "/message_history/{id}": {
+      "schema": "MessageLog",
+      "description": "Complete communication archive"
+    },
+    "/travailleurs/{workerId}": {
+      "schema": "Worker",
+      "description": "Service providers list"
+    },
+    "/chats/{userId}": {
+      "schema": "object",
+      "description": "Chat sessions metadata"
+    },
+    "/chats/{userId}/messages/{msgId}": {
+      "schema": "object",
+      "description": "Individual chat messages"
+    },
+    "/users/{phone}/notifications/{notifId}": {
+      "schema": "object",
+      "description": "User specific notifications"
+    },
+    "/offres_emploi/{offerId}": {
+      "schema": "Worker",
+      "description": "Job offers for admin"
+    },
+    "/offers/{offerId}": {
+      "schema": "Offer",
+      "description": "Promotional offers"
+    },
+    "/agences/{id}": {
+      "schema": "Worker",
+      "description": "Agencies"
+    },
+    "/proprietaires/{id}": {
+      "schema": "Worker",
+      "description": "Property owners"
+    },
+    "/entreprises/{id}": {
+      "schema": "Worker",
+      "description": "Companies"
+    },
+    "/recruitment/{id}": {
+      "schema": "Recruitment",
+      "description": "Recruitment requests"
+    },
+    "/placement/{id}": {
+      "schema": "Recruitment",
+      "description": "Placement requests"
+    },
+    "/messages/{id}": {
+      "schema": "object",
+      "description": "Messaging"
+    },
+    "/Chats/{id}": {
+      "schema": "object",
+      "description": "Chat sessions"
+    },
+    "/reviews/{id}": {
+      "schema": "object",
+      "description": "Worker reviews"
+    },
+    "/interventions/{id}": {
+      "schema": "object",
+      "description": "Service interventions"
+    },
+    "/availabilities/{id}": {
+      "schema": "object",
+      "description": "Worker availabilities"
+    }
+  }
+}

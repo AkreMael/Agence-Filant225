@@ -1,0 +1,90 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Global Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      // Admin is identified by phone number 0705052632
+      return isSignedIn() && 
+             exists(/databases/$(database)/documents/users/0705052632) &&
+             get(/databases/$(database)/documents/users/0705052632).data.userId == request.auth.uid;
+    }
+
+    function isOwner(phone) {
+      return isSignedIn() && 
+             exists(/databases/$(database)/documents/users/$(phone)) &&
+             get(/databases/$(database)/documents/users/$(phone)).data.userId == request.auth.uid;
+    }
+
+    function isChatOwner(phone) {
+      return isSignedIn() && (
+        isOwner(phone) || 
+        (exists(/databases/$(database)/documents/chats/$(phone)) && get(/databases/$(database)/documents/chats/$(phone)).data.ownerUid == request.auth.uid)
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // --- Rules for Collections ---
+
+    // USERS collection
+    match /users/{phone} {
+      allow get: if isSignedIn() && (isAdmin() || isOwner(phone));
+      allow list: if isAdmin();
+      
+      allow create: if isSignedIn() && isValidId(phone) && request.resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn() && (isAdmin() || (request.auth.uid == resource.data.userId && request.resource.data.userId == resource.data.userId));
+      allow delete: if isAdmin();
+
+      // Notifications Subcollection
+      match /notifications/{notifId} {
+        // Evaluate based on the parent user UID
+        allow read, write: if isSignedIn() && (isAdmin() || isOwner(phone));
+      }
+    }
+
+    // CHATS collection
+    match /chats/{phone} {
+      allow read, write: if isSignedIn() && (isAdmin() || isChatOwner(phone));
+
+      match /messages/{msgId} {
+        allow read, write: if isSignedIn() && (isAdmin() || isChatOwner(phone));
+        allow create: if isSignedIn();
+      }
+    }
+
+    // Public Browsable Collections
+    match /{collection}/{id} {
+      allow read: if collection in ['travailleurs', 'agences', 'proprietaires', 'entreprises', 'offers', 'offres_emploi'];
+      allow write: if isAdmin();
+    }
+
+    // Admin Logging Service
+    match /activity_logs/{id} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn();
+    }
+
+    // Client Requests
+    match /centralized_requests/{id} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+
+    // Other Generic Collections
+    match /{collection}/{id} {
+      allow read, write: if isSignedIn() && collection in ['recruitment', 'placement', 'interventions', 'reviews', 'availabilities', 'message_history', 'form_submissions'];
+    }
+  }
+}

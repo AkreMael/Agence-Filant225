@@ -1,0 +1,109 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Global Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      // Admin is identified by phone number 0705052632 in this app's context
+      // We look up the user by UID and check their role or status
+      // Performance optimization: we can't easily check by phone in a helper without a get()
+      // But we can check if the current user document at /users/0705052632 has the UID
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/users/0705052632) &&
+        get(/databases/$(database)/documents/users/0705052632).data.userId == request.auth.uid
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Entity Validations ---
+    function isValidUser(data) {
+      return data.keys().hasAll(['name', 'phone']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             data.phone is string && data.phone.size() >= 8 && data.phone.size() <= 15 &&
+             (!data.keys().hasAny(['email']) || (data.email is string && data.email.size() <= 255)) &&
+             (!data.keys().hasAny(['pin']) || (data.pin is string && data.pin.size() == 4)) &&
+             (!data.keys().hasAny(['role']) || (data.role is string && data.role.size() <= 50)) &&
+             (!data.keys().hasAny(['city']) || (data.city is string && data.city.size() <= 100));
+    }
+
+    function isValidWorker(data) {
+      return data.keys().hasAll(['name', 'service']) &&
+             data.name is string &&
+             data['service'] is string &&
+             data.name.size() <= 100 &&
+             data['service'].size() <= 100 &&
+             (!data.keys().hasAny(['city']) || (data.city is string && data.city.size() <= 100)) &&
+             (!data.keys().hasAny(['description']) || (data.description is string && data.description.size() <= 1000));
+    }
+
+    // --- Rules for Collections ---
+
+    // USERS collection
+    match /users/{phone} {
+      allow get: if isSignedIn() && (request.auth.uid == existing().userId || isAdmin());
+      allow list: if isAdmin(); // Admin can list users
+      
+      allow create: if isSignedIn() && 
+                      isValidId(phone) && 
+                      isValidUser(incoming()) && 
+                      incoming().userId == request.auth.uid &&
+                      incoming().role == 'Client' && // Default role on registration
+                      incoming().isVerified == false; // Cannot self-verify
+                      
+      allow update: if isSignedIn() && (
+        // Admin update anything
+        isAdmin() ||
+        // User updates their own profile
+        (request.auth.uid == existing().userId && 
+         isValidUser(incoming()) &&
+         incoming().userId == existing().userId && // Identity integrity
+         // Immobilize specific fields
+         incoming().diff(existing()).affectedKeys().hasOnly(['name', 'city', 'pin', 'lastConnection', 'lastSeen', 'updatedAt', 'activeSessionId', 'fcmToken', 'status']) &&
+         (!('role' in incoming().diff(existing()).affectedKeys())) && // Cannot change role
+         (!('isVerified' in incoming().diff(existing()).affectedKeys())) // Cannot self-verify
+        )
+      );
+      
+      allow delete: if isAdmin();
+    }
+
+    // Dynamic collection matching for all service-related collections
+    match /{collection}/{id} {
+      allow get: if collection in ['travailleurs', 'agences', 'proprietaires', 'entreprises', 'offers', 'offres_emploi'];
+      allow list: if collection in ['travailleurs', 'agences', 'proprietaires', 'entreprises', 'offers', 'offres_emploi'];
+      
+      allow read: if isSignedIn() && collection in ['recruitment', 'placement', 'interventions', 'reviews', 'messages', 'Chats', 'availabilities'];
+      
+      allow create: if isSignedIn() && (
+        (collection in ['travailleurs', 'agences', 'proprietaires', 'entreprises', 'offres_emploi'] && isValidId(id) && isValidWorker(incoming())) ||
+        (collection in ['recruitment', 'placement', 'interventions', 'reviews', 'messages', 'Chats', 'availabilities'] && isValidId(id))
+      );
+                    
+      allow update: if isSignedIn() && (
+        isAdmin() || 
+        (collection in ['travailleurs', 'agences', 'proprietaires', 'entreprises', 'offers', 'offres_emploi'] && existing().userId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['description', 'price', 'frequency', 'photoUrl', 'isUnblurred', 'profileImageUrl']))
+      );
+                    
+      allow delete: if isAdmin();
+    }
+  }
+}
